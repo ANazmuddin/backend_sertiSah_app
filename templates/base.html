@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ title if title else "Admin Panel" }}</title>
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <h2>Sertifikat Digital</h2>
+    <nav>
+      <a href="/dashboard">Dashboard</a>
+      <a href="/generate">Generate Sertifikat</a>
+      <a href="/certificates">Daftar Sertifikat</a>
+      <a href="/logout" class="logout">Logout</a>
+    </nav>
+  </aside>
+
+  <!-- Main content -->
+  <main class="content">
+    <header class="header">
+      <h1>{{ title }}</h1>
+    </header>
+
+    <section class="page-content">
+      {% block content %}{% endblock %}
+    </section>
+  </main>
+</div>
+
+</body>
+</html>
