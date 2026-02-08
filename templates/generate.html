@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h3>Generate Sertifikat Akademik</h3>
+
+<p style="color:#4b5563; font-size:14px;">
+  Masukkan data mahasiswa untuk menerbitkan sertifikat akademik digital.
+</p>
+
+<form method="post" action="/generate" class="form-generate">
+
+  <div class="form-group">
+    <label>Nama Mahasiswa</label>
+    <input type="text" name="name" required>
+  </div>
+
+  <div class="form-group">
+    <label>NIM</label>
+    <input type="text" name="nim" required>
+  </div>
+
+  <div class="form-group">
+    <label>Program Studi</label>
+    <input type="text" name="program_studi" required>
+  </div>
+
+  <div class="form-group">
+    <label>Institusi</label>
+    <input type="text" name="institusi" required>
+  </div>
+
+  <button type="submit" class="btn-primary">
+    Generate Sertifikat
+  </button>
+</form>
+
+{% if certificate %}
+<div class="result-box success">
+  <h4>✅ Sertifikat Berhasil Dibuat</h4>
+
+  <p><strong>ID Sertifikat:</strong><br>{{ certificate.certificate_id }}</p>
+  <p><strong>Hash:</strong><br><small>{{ certificate.certificate_hash }}</small></p>
+
+  <a
+    href="/download-certificate/{{ certificate.certificate_id }}"
+    class="btn-secondary"
+    target="_blank"
+  >
+    Download PDF
+  </a>
+</div>
+{% endif %}
+
+{% endblock %}
