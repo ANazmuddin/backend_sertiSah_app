@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h3>Daftar Sertifikat</h3>
+
+{% if certificates|length == 0 %}
+  <p>Belum ada sertifikat yang dibuat.</p>
+{% else %}
+<table class="cert-table">
+  <thead>
+    <tr>
+      <th>No</th>
+      <th>ID Sertifikat</th>
+      <th>Nama</th>
+      <th>NIM</th>
+      <th>Program Studi</th>
+      <th>Aksi</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for cert in certificates %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td>{{ cert.certificate_id }}</td>
+      <td>{{ cert.name }}</td>
+      <td>{{ cert.nim }}</td>
+      <td>{{ cert.program_studi }}</td>
+      <td>
+        <a
+          href="/download-certificate/{{ cert.certificate_id }}"
+          class="btn-secondary"
+          target="_blank"
+        >
+          Download PDF
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}
