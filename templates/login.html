@@ -1,24 +1,88 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
+  <meta charset="UTF-8">
   <title>Login Admin</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/admin.css">
 </head>
-<body>
-  <h2>Login Admin</h2>
+<body class="login-body">
 
-  {% if error %}
-    <p style="color:red;">{{ error }}</p>
-  {% endif %}
+<div class="login-wrapper">
 
-  <form method="post" action="/login">
-  <input type="text" name="username" required>
-  <input type="password" name="password" required>
-  <button type="submit">Login</button>
-</form>
+  <!-- LEFT SIDE (Branding) -->
+  <div class="login-left">
+    <h1>Sistem Verifikasi Sertifikat</h1>
+    <p>
+      Platform resmi untuk penerbitan dan validasi
+      sertifikat akademik digital berbasis teknologi modern.
+    </p>
+  </div>
 
-{% if error %}
-<p style="color:red;">{{ error }}</p>
-{% endif %}
+  <!-- RIGHT SIDE (Form) -->
+  <div class="login-right">
+    <div class="login-card">
+
+      <h2>Login Admin</h2>
+
+      {% if error %}
+        <div class="error-box">
+          {{ error }}
+        </div>
+      {% endif %}
+
+      <form method="post" action="/login">
+
+        <div class="input-group">
+          <input type="text" name="username" required>
+          <label>Username</label>
+        </div>
+
+        <div class="input-group password-group">
+          <input type="password" name="password" id="passwordInput" required>
+          <label>Password</label>
+
+          <span class="toggle-password" onclick="togglePassword()">
+            <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg"
+                 width="20" height="20" fill="none"
+                 stroke="currentColor" stroke-width="2"
+                 viewBox="0 0 24 24">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </span>
+        </div>
+
+        <button type="submit" class="login-btn">
+          Masuk
+        </button>
+
+      </form>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+function togglePassword() {
+  const input = document.getElementById("passwordInput");
+  const icon = document.getElementById("eyeIcon");
+
+  if (input.type === "password") {
+    input.type = "text";
+    icon.innerHTML = `
+      <path d="M17.94 17.94A10.94 10.94 0 0112 20c-7 0-11-8-11-8a21.8 21.8 0 015.17-6.88"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    `;
+  } else {
+    input.type = "password";
+    icon.innerHTML = `
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    `;
+  }
+}
+</script>
+
 </body>
 </html>
