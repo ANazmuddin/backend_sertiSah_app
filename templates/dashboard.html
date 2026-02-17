@@ -2,15 +2,58 @@
 
 {% block content %}
 
-<h3>Dashboard Admin</h3>
+<div class="dashboard-wrapper">
 
-<p>
-  Selamat datang di sistem verifikasi sertifikat akademik digital.
-</p>
+  <!-- ================= WELCOME ================= -->
+  <div class="card welcome-card">
+    <h2>Dashboard Admin</h2>
+    <p>
+      Selamat datang di sistem verifikasi sertifikat akademik digital.
+      Kelola penerbitan dan validasi sertifikat dengan aman dan terintegrasi.
+    </p>
+  </div>
 
-<ul>
-  <li>Gunakan menu <strong>Generate Sertifikat</strong> untuk menerbitkan sertifikat baru</li>
-  <li>Gunakan menu <strong>Daftar Sertifikat</strong> untuk melihat sertifikat yang telah dibuat</li>
-</ul>
+  <!-- ================= STATISTIK ================= -->
+  <div class="stats-container">
+
+    <div class="stat-card">
+      <h4>Total Sertifikat</h4>
+      <p class="stat-number">{{ total_certificates }}</p>
+    </div>
+
+    <div class="stat-card">
+      <h4>Status Sistem</h4>
+      <p class="stat-badge active">Aktif</p>
+    </div>
+
+  </div>
+
+  <!-- ================= QUICK ACTION ================= -->
+  <div class="card quick-actions">
+    <h3>Aksi Cepat</h3>
+
+    <div class="action-buttons">
+      <a href="/generate" class="btn btn-primary">
+        Generate Sertifikat
+      </a>
+
+      <a href="/certificates" class="btn btn-secondary">
+        Lihat Daftar Sertifikat
+      </a>
+    </div>
+  </div>
+
+  <!-- ================= INFO SYSTEM ================= -->
+  <div class="card info-card">
+    <h3>Informasi Sistem</h3>
+    <ul>
+      <li>Sertifikat dibuat dalam format PDF resmi</li>
+      <li>Setiap sertifikat memiliki hash SHA-256 unik</li>
+      <li>QR Code digunakan untuk verifikasi keaslian</li>
+      <li>Terintegrasi dengan aplikasi Android untuk validasi</li>
+    </ul>
+  </div>
+
+</div>
 
 {% endblock %}
