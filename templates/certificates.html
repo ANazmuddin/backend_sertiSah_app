@@ -2,43 +2,91 @@
 
 {% block content %}
 
-<h3>Daftar Sertifikat</h3>
+<div class="card">
 
-{% if certificates|length == 0 %}
-  <p>Belum ada sertifikat yang dibuat.</p>
-{% else %}
-<table class="cert-table">
-  <thead>
-    <tr>
-      <th>No</th>
-      <th>ID Sertifikat</th>
-      <th>Nama</th>
-      <th>NIM</th>
-      <th>Program Studi</th>
-      <th>Aksi</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for cert in certificates %}
-    <tr>
-      <td>{{ loop.index }}</td>
-      <td>{{ cert.certificate_id }}</td>
-      <td>{{ cert.name }}</td>
-      <td>{{ cert.nim }}</td>
-      <td>{{ cert.program_studi }}</td>
-      <td>
-        <a
-          href="/download-certificate/{{ cert.certificate_id }}"
-          class="btn-secondary"
-          target="_blank"
-        >
-          Download PDF
-        </a>
-      </td>
-    </tr>
+  <!-- ================= SEARCH BAR ================= -->
+  <div class="card-header">
+    <h2>Daftar Sertifikat</h2>
+  </div>
+
+  <form method="get" action="/certificates" class="search-form">
+    <input type="text"
+           name="nim"
+           placeholder="Cari berdasarkan NIM..."
+           value="{{ search_nim if search_nim else '' }}">
+    <button type="submit" class="btn btn-primary">Cari</button>
+  </form>
+
+  <!-- ================= TABEL ================= -->
+  {% if certificates and certificates|length > 0 %}
+
+  <div class="table-container">
+    <table class="cert-table">
+      <thead>
+        <tr>
+          <th>Nama</th>
+          <th>NIM</th>
+          <th>Program Studi</th>
+          <th>Institusi</th>
+          <th>Tanggal Terbit</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cert in certificates %}
+        <tr>
+          <td>{{ cert.name }}</td>
+          <td>{{ cert.nim }}</td>
+          <td>{{ cert.program_studi }}</td>
+          <td>{{ cert.institusi }}</td>
+          <td>{{ cert.issue_date }}</td>
+          <td class="action-cell">
+
+            <!-- Download -->
+            <a href="/download-certificate/{{ cert.certificate_id }}"
+               class="btn btn-primary">
+              Download
+            </a>
+
+            <!-- Delete -->
+            <form method="post"
+                  action="/delete-certificate/{{ cert.certificate_id }}"
+                  onsubmit="return confirm('Yakin ingin menghapus sertifikat ini?');"
+                  style="display:inline;">
+              <button type="submit" class="btn btn-danger">
+                Delete
+              </button>
+            </form>
+
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= PAGINATION ================= -->
+  <div class="pagination">
+    {% for p in range(1, total_pages + 1) %}
+      <a href="/certificates?page={{ p }}&nim={{ search_nim }}"
+         class="page-btn {% if p == page %}active{% endif %}">
+        {{ p }}
+      </a>
     {% endfor %}
-  </tbody>
-</table>
-{% endif %}
+  </div>
+
+  {% else %}
+
+  <!-- ================= EMPTY STATE ================= -->
+  <div class="empty-state">
+    <p>Belum ada sertifikat yang tersedia.</p>
+    <a href="/generate" class="btn btn-primary">
+      Buat Sertifikat Pertama
+    </a>
+  </div>
+
+  {% endif %}
+
+</div>
 
 {% endblock %}
