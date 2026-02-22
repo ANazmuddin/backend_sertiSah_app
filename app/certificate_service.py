@@ -53,7 +53,7 @@ def generate_certificate(name, nim, program_studi, institusi):
     c.rect(30, 30, width - 60, height - 60)
 
     # Logo
-    logo_path = "static/logo.png"
+    logo_path = "static/UCA.png"
     if os.path.exists(logo_path):
         c.drawImage(logo_path, width/2 - 50, height - 150, width=100, height=100, preserveAspectRatio=True)
 
