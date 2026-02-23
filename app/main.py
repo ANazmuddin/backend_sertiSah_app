@@ -12,6 +12,7 @@ from app.models import Base
 from app.auth import login_required, authenticate_admin
 from app.certificate_service import generate_certificate
 from app.schemas import VerifyRequest, VerifyResponse
+from app.blockchain import verify_certificate_on_chain
 
 # ================= APP INIT =================
 
@@ -48,14 +49,28 @@ def verify_certificate(payload: VerifyRequest):
     if not os.path.exists(meta_file):
         return VerifyResponse(
             valid=False,
-            message="Data sertifikat tidak ditemukan"
+            message="Data sertifikat tidak ditemukan",
+            data=None,
+            blockchain_registered=False
         )
 
-    with open(meta_file, "r") as f:
-        certs = json.load(f)
+    try:
+        with open(meta_file, "r") as f:
+            certs = json.load(f)
+            if not isinstance(certs, list):
+                certs = []
+    except Exception:
+        certs = []
 
     for cert in certs:
         if cert["certificate_hash"] == payload.certificate_hash:
+
+            try:
+                on_chain = verify_certificate_on_chain(payload.certificate_hash)
+            except Exception as e:
+                print("BLOCKCHAIN VERIFY ERROR:", e)
+                on_chain = False
+
             return VerifyResponse(
                 valid=True,
                 message="Sertifikat valid dan terdaftar",
@@ -66,12 +81,16 @@ def verify_certificate(payload: VerifyRequest):
                     "program_studi": cert["program_studi"],
                     "institusi": cert["institusi"],
                     "issue_date": cert["issue_date"],
-                }
+                    "blockchain_tx": cert.get("blockchain_tx")
+                },
+                blockchain_registered=on_chain
             )
 
     return VerifyResponse(
         valid=False,
-        message="Sertifikat tidak valid"
+        message="Sertifikat tidak valid",
+        data=None,
+        blockchain_registered=False
     )
 
 # ============================================================
