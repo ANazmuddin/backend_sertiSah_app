@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 
 class VerifyRequest(BaseModel):
     certificate_hash: str
@@ -17,4 +17,5 @@ class CertificateData(BaseModel):
 class VerifyResponse(BaseModel):
     valid: bool
     message: str
-    data: Optional[CertificateData] = None
+    data: Optional[Dict[str, Any]] = None
+    blockchain_registered: bool = False
