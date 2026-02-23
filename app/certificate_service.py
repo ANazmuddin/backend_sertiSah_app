@@ -5,17 +5,16 @@ import hashlib
 from datetime import datetime
 
 import qrcode
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
-from reportlab.platypus import Table, TableStyle
-from reportlab.lib import colors
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import inch
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfbase import pdfmetrics
-from reportlab.platypus import Frame
 from reportlab.pdfgen import canvas
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
 
+from app.blockchain import store_certificate_on_chain
+
+
+# ===============================
+# CONFIG
+# ===============================
 
 CERT_DIR = "certificates"
 META_FILE = os.path.join(CERT_DIR, "certificates.json")
@@ -23,27 +22,47 @@ META_FILE = os.path.join(CERT_DIR, "certificates.json")
 if not os.path.exists(CERT_DIR):
     os.makedirs(CERT_DIR)
 
+
+# ===============================
+# MAIN FUNCTION
+# ===============================
+
 def generate_certificate(name, nim, program_studi, institusi):
 
     certificate_id = str(uuid.uuid4())
     issue_date = datetime.now().strftime("%d %B %Y")
 
-    # 🔐 Hash untuk verifikasi
+    # ===============================
+    # 🔐 HASH UNTUK VERIFIKASI
+    # ===============================
     raw_data = f"{name}{nim}{program_studi}{institusi}{certificate_id}"
     certificate_hash = hashlib.sha256(raw_data.encode()).hexdigest()
 
-    pdf_path = os.path.join(CERT_DIR, f"{certificate_id}.pdf")
+    # ===============================
+    # 🔗 SIMPAN KE BLOCKCHAIN
+    # ===============================
+    try:
+        tx_hash = store_certificate_on_chain(certificate_hash)
+        print("BLOCKCHAIN TX HASH:", tx_hash)
+    except Exception as e:
+        tx_hash = None
+        print("ERROR BLOCKCHAIN:", e)
 
-    # =============================
-    # Generate QR Code
-    # =============================
-    qr = qrcode.make(certificate_hash)
+    # ===============================
+    # 📁 FILE PATH
+    # ===============================
+    pdf_path = os.path.join(CERT_DIR, f"{certificate_id}.pdf")
     qr_path = os.path.join(CERT_DIR, f"{certificate_id}_qr.png")
+
+    # ===============================
+    # 📷 GENERATE QR
+    # ===============================
+    qr = qrcode.make(certificate_hash)
     qr.save(qr_path)
 
-    # =============================
-    # Generate PDF
-    # =============================
+    # ===============================
+    # 📄 GENERATE PDF
+    # ===============================
     c = canvas.Canvas(pdf_path, pagesize=A4)
     width, height = A4
 
@@ -52,36 +71,43 @@ def generate_certificate(name, nim, program_studi, institusi):
     c.setLineWidth(4)
     c.rect(30, 30, width - 60, height - 60)
 
-    # Logo
+    # Logo (optional)
     logo_path = "static/UCA.png"
     if os.path.exists(logo_path):
-        c.drawImage(logo_path, width/2 - 50, height - 150, width=100, height=100, preserveAspectRatio=True)
+        c.drawImage(
+            logo_path,
+            width/2 - 50,
+            height - 150,
+            width=100,
+            height=100,
+            preserveAspectRatio=True
+        )
 
-    # Judul
+    # Title
     c.setFont("Helvetica-Bold", 24)
     c.drawCentredString(width/2, height - 180, "SERTIFIKAT AKADEMIK")
 
     c.setFont("Helvetica", 14)
     c.drawCentredString(width/2, height - 210, "Diberikan kepada:")
 
-    # Nama Mahasiswa
+    # Name
     c.setFont("Helvetica-Bold", 20)
     c.drawCentredString(width/2, height - 250, name.upper())
 
-    # Detail mahasiswa
+    # Details
     c.setFont("Helvetica", 14)
     c.drawCentredString(width/2, height - 280, f"NIM: {nim}")
     c.drawCentredString(width/2, height - 300, f"Program Studi: {program_studi}")
     c.drawCentredString(width/2, height - 320, f"Institusi: {institusi}")
 
-    # Nomor Sertifikat
+    # Certificate ID
     c.setFont("Helvetica-Oblique", 10)
     c.drawCentredString(width/2, height - 350, f"Nomor Sertifikat: {certificate_id}")
 
-    # Tanggal
+    # Issue Date
     c.drawString(60, 100, f"Tanggal Terbit: {issue_date}")
 
-    # Tanda tangan
+    # Signature line
     c.line(width - 200, 120, width - 60, 120)
     c.drawString(width - 190, 100, "Kepala Program Studi")
 
@@ -90,9 +116,9 @@ def generate_certificate(name, nim, program_studi, institusi):
 
     c.save()
 
-    # =============================
-    # Simpan metadata JSON
-    # =============================
+    # ===============================
+    # 💾 SIMPAN METADATA JSON
+    # ===============================
     certificate_data = {
         "certificate_id": certificate_id,
         "name": name,
@@ -100,13 +126,20 @@ def generate_certificate(name, nim, program_studi, institusi):
         "program_studi": program_studi,
         "institusi": institusi,
         "issue_date": issue_date,
-        "certificate_hash": certificate_hash
+        "certificate_hash": certificate_hash,
+        "blockchain_tx": tx_hash
     }
 
     certs = []
+
     if os.path.exists(META_FILE):
-        with open(META_FILE, "r") as f:
-            certs = json.load(f)
+        try:
+            with open(META_FILE, "r") as f:
+                certs = json.load(f)
+                if not isinstance(certs, list):
+                    certs = []
+        except Exception:
+            certs = []
 
     certs.append(certificate_data)
 
