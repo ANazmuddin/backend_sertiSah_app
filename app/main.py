@@ -44,36 +44,32 @@ Base.metadata.create_all(bind=engine)
 
 @app.post("/verify", response_model=VerifyResponse)
 def verify_certificate(payload: VerifyRequest):
+
     meta_file = "certificates/certificates.json"
 
     if not os.path.exists(meta_file):
         return VerifyResponse(
             valid=False,
             message="Data sertifikat tidak ditemukan",
-            data=None,
-            blockchain_registered=False
+            data=None
         )
 
-    try:
-        with open(meta_file, "r") as f:
-            certs = json.load(f)
-            if not isinstance(certs, list):
-                certs = []
-    except Exception:
-        certs = []
+    with open(meta_file, "r") as f:
+        certs = json.load(f)
 
     for cert in certs:
         if cert["certificate_hash"] == payload.certificate_hash:
 
             try:
-                on_chain = verify_certificate_on_chain(payload.certificate_hash)
-            except Exception as e:
-                print("BLOCKCHAIN VERIFY ERROR:", e)
-                on_chain = False
+                blockchain_status = check_certificate_on_chain(
+                    payload.certificate_hash
+                )
+            except Exception:
+                blockchain_status = False
 
             return VerifyResponse(
                 valid=True,
-                message="Sertifikat valid dan terdaftar",
+                message="Sertifikat ditemukan",
                 data={
                     "certificate_id": cert["certificate_id"],
                     "name": cert["name"],
@@ -81,16 +77,17 @@ def verify_certificate(payload: VerifyRequest):
                     "program_studi": cert["program_studi"],
                     "institusi": cert["institusi"],
                     "issue_date": cert["issue_date"],
-                    "blockchain_tx": cert.get("blockchain_tx")
-                },
-                blockchain_registered=on_chain
+                    "blockchain_verified": blockchain_status,
+                    "transaction_hash": cert.get("transaction_hash"),
+                    "explorer_url": f"https://amoy.polygonscan.com/tx/{cert.get('transaction_hash')}"
+                    if cert.get("transaction_hash") else None
+                }
             )
 
     return VerifyResponse(
         valid=False,
         message="Sertifikat tidak valid",
-        data=None,
-        blockchain_registered=False
+        data=None
     )
 
 # ============================================================
