@@ -38,14 +38,16 @@ def generate_certificate(name, nim, program_studi, institusi):
     raw_data = f"{name}{nim}{program_studi}{institusi}{certificate_id}"
     certificate_hash = hashlib.sha256(raw_data.encode()).hexdigest()
 
+    print("HASH YANG DIGENERATE:", certificate_hash)
+
     # ===============================
     # 🔗 SIMPAN KE BLOCKCHAIN
     # ===============================
+    tx_hash = None
     try:
         tx_hash = store_certificate_on_chain(certificate_hash)
         print("BLOCKCHAIN TX HASH:", tx_hash)
     except Exception as e:
-        tx_hash = None
         print("ERROR BLOCKCHAIN:", e)
 
     # ===============================
