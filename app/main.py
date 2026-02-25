@@ -1,5 +1,6 @@
 import os
 import json
+from math import ceil
 
 from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
@@ -14,6 +15,7 @@ from app.certificate_service import generate_certificate
 from app.schemas import VerifyRequest, VerifyResponse
 from app.blockchain import verify_certificate_on_chain
 
+
 # ================= APP INIT =================
 
 app = FastAPI(
@@ -22,21 +24,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# ================= MIDDLEWARE =================
-
 app.add_middleware(
     SessionMiddleware,
     secret_key="super-secret-key-skripsi"
 )
 
-# ================= STATIC & TEMPLATE =================
-
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# ================= DATABASE =================
-
 Base.metadata.create_all(bind=engine)
+
 
 # ============================================================
 # ================= ANDROID API (PUBLIC) =====================
@@ -51,21 +48,32 @@ def verify_certificate(payload: VerifyRequest):
         return VerifyResponse(
             valid=False,
             message="Data sertifikat tidak ditemukan",
-            data=None
+            data=None,
+            blockchain_registered=False
         )
 
-    with open(meta_file, "r") as f:
-        certs = json.load(f)
+    try:
+        with open(meta_file, "r") as f:
+            certs = json.load(f)
+    except Exception:
+        certs = []
+
+    incoming_hash = payload.certificate_hash.strip()
 
     for cert in certs:
-        if cert["certificate_hash"] == payload.certificate_hash:
 
+        stored_hash = cert["certificate_hash"].strip()
+
+        if stored_hash == incoming_hash:
+
+            # ===== CEK BLOCKCHAIN =====
             try:
-                blockchain_status = check_certificate_on_chain(
-                    payload.certificate_hash
-                )
-            except Exception:
+                blockchain_status = verify_certificate_on_chain(incoming_hash)
+            except Exception as e:
+                print("ERROR VERIFY BLOCKCHAIN:", e)
                 blockchain_status = False
+
+            tx_hash = cert.get("blockchain_tx")
 
             return VerifyResponse(
                 valid=True,
@@ -78,17 +86,22 @@ def verify_certificate(payload: VerifyRequest):
                     "institusi": cert["institusi"],
                     "issue_date": cert["issue_date"],
                     "blockchain_verified": blockchain_status,
-                    "transaction_hash": cert.get("transaction_hash"),
-                    "explorer_url": f"https://amoy.polygonscan.com/tx/{cert.get('transaction_hash')}"
-                    if cert.get("transaction_hash") else None
-                }
+                    "transaction_hash": tx_hash,
+                    "explorer_url": (
+                        f"https://amoy.polygonscan.com/tx/{tx_hash}"
+                        if tx_hash else None
+                    )
+                },
+                blockchain_registered=blockchain_status
             )
 
     return VerifyResponse(
         valid=False,
         message="Sertifikat tidak valid",
-        data=None
+        data=None,
+        blockchain_registered=False
     )
+
 
 # ============================================================
 # ================= DOWNLOAD (PUBLIC) ========================
@@ -108,6 +121,7 @@ def download_certificate(certificate_id: str):
         filename=f"{certificate_id}.pdf"
     )
 
+
 # ============================================================
 # ================= AUTH ========================
 # ============================================================
@@ -115,6 +129,7 @@ def download_certificate(certificate_id: str):
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
+
 
 @app.post("/login")
 def login(request: Request, username: str = Form(...), password: str = Form(...)):
@@ -132,10 +147,12 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
     request.session["admin_id"] = user.id
     return RedirectResponse("/dashboard", status_code=302)
 
+
 @app.get("/logout")
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/login", status_code=302)
+
 
 # ============================================================
 # ================= DASHBOARD (PROTECTED) ====================
@@ -144,7 +161,7 @@ def logout(request: Request):
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(
     request: Request,
-    auth = Depends(login_required)
+    auth=Depends(login_required)
 ):
     if auth:
         return auth
@@ -178,7 +195,7 @@ def dashboard(
 @app.get("/generate", response_class=HTMLResponse)
 def generate_page(
     request: Request,
-    auth = Depends(login_required)
+    auth=Depends(login_required)
 ):
     if auth:
         return auth
@@ -188,6 +205,7 @@ def generate_page(
         {"request": request, "title": "Generate Sertifikat"}
     )
 
+
 @app.post("/generate", response_class=HTMLResponse)
 def generate_submit(
     request: Request,
@@ -195,7 +213,7 @@ def generate_submit(
     nim: str = Form(...),
     program_studi: str = Form(...),
     institusi: str = Form(...),
-    auth = Depends(login_required)
+    auth=Depends(login_required)
 ):
     if auth:
         return auth
@@ -211,18 +229,17 @@ def generate_submit(
         }
     )
 
-# ============================================================
-# ================= LIST CERTIFICATE (PROTECTED) =============
-# ============================================================
 
-from math import ceil
+# ============================================================
+# ================= LIST CERTIFICATE =========================
+# ============================================================
 
 @app.get("/certificates", response_class=HTMLResponse)
 def list_certificates(
     request: Request,
     page: int = 1,
     nim: str = "",
-    auth = Depends(login_required)
+    auth=Depends(login_required)
 ):
     if auth:
         return auth
@@ -236,14 +253,14 @@ def list_certificates(
                 certs = json.load(f)
                 if not isinstance(certs, list):
                     certs = []
-        except Exception:
+        except:
             certs = []
 
-    # 🔎 FILTER BERDASARKAN NIM
+    # FILTER
     if nim:
         certs = [c for c in certs if nim.lower() in c["nim"].lower()]
 
-    # 📄 PAGINATION
+    # PAGINATION
     per_page = 5
     total = len(certs)
     total_pages = ceil(total / per_page) if total > 0 else 1
@@ -269,7 +286,7 @@ def list_certificates(
 def delete_certificate(
     request: Request,
     certificate_id: str,
-    auth = Depends(login_required)
+    auth=Depends(login_required)
 ):
     if auth:
         return auth
