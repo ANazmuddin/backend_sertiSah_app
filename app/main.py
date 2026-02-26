@@ -9,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.database import engine, SessionLocal
-from app.models import Base
+from app.models import Base, Certificate
 from app.auth import login_required, authenticate_admin
 from app.certificate_service import generate_certificate
 from app.schemas import VerifyRequest, VerifyResponse
@@ -42,65 +42,43 @@ Base.metadata.create_all(bind=engine)
 @app.post("/verify", response_model=VerifyResponse)
 def verify_certificate(payload: VerifyRequest):
 
-    meta_file = "certificates/certificates.json"
+    db = SessionLocal()
 
-    if not os.path.exists(meta_file):
+    cert = db.query(Certificate).filter(
+        Certificate.certificate_hash == payload.certificate_hash
+    ).first()
+
+    if not cert:
+        db.close()
         return VerifyResponse(
             valid=False,
-            message="Data sertifikat tidak ditemukan",
+            message="Sertifikat tidak valid",
             data=None,
             blockchain_registered=False
         )
 
-    try:
-        with open(meta_file, "r") as f:
-            certs = json.load(f)
-    except Exception:
-        certs = []
+    blockchain_status = verify_certificate_on_chain(payload.certificate_hash)
 
-    incoming_hash = payload.certificate_hash.strip()
-
-    for cert in certs:
-
-        stored_hash = cert["certificate_hash"].strip()
-
-        if stored_hash == incoming_hash:
-
-            # ===== CEK BLOCKCHAIN =====
-            try:
-                blockchain_status = verify_certificate_on_chain(incoming_hash)
-            except Exception as e:
-                print("ERROR VERIFY BLOCKCHAIN:", e)
-                blockchain_status = False
-
-            tx_hash = cert.get("blockchain_tx")
-
-            return VerifyResponse(
-                valid=True,
-                message="Sertifikat ditemukan",
-                data={
-                    "certificate_id": cert["certificate_id"],
-                    "name": cert["name"],
-                    "nim": cert["nim"],
-                    "program_studi": cert["program_studi"],
-                    "institusi": cert["institusi"],
-                    "issue_date": cert["issue_date"],
-                    "blockchain_verified": blockchain_status,
-                    "transaction_hash": tx_hash,
-                    "explorer_url": (
-                        f"https://amoy.polygonscan.com/tx/{tx_hash}"
-                        if tx_hash else None
-                    )
-                },
-                blockchain_registered=blockchain_status
-            )
-
-    return VerifyResponse(
-        valid=False,
-        message="Sertifikat tidak valid",
-        data=None,
-        blockchain_registered=False
+    response = VerifyResponse(
+        valid=True,
+        message="Sertifikat ditemukan",
+        data={
+            "certificate_id": cert.certificate_id,
+            "name": cert.name,
+            "nim": cert.nim,
+            "program_studi": cert.program_studi,
+            "institusi": cert.institusi,
+            "issue_date": cert.issue_date,
+            "blockchain_verified": blockchain_status,
+            "transaction_hash": cert.blockchain_tx,
+            "explorer_url": f"https://amoy.polygonscan.com/tx/{cert.blockchain_tx}"
+            if cert.blockchain_tx else None
+        },
+        blockchain_registered=blockchain_status
     )
+
+    db.close()
+    return response
 
 
 # ============================================================
@@ -166,24 +144,25 @@ def dashboard(
     if auth:
         return auth
 
-    meta_file = "certificates/certificates.json"
-    certs = []
+    db = SessionLocal()
 
-    if os.path.exists(meta_file):
-        try:
-            with open(meta_file, "r") as f:
-                certs = json.load(f)
-        except:
-            certs = []
+    total_certificates = db.query(Certificate).count()
 
-    total_certificates = len(certs)
+    total_blockchain = (
+        db.query(Certificate)
+        .filter(Certificate.blockchain_tx.isnot(None))
+        .count()
+    )
+
+    db.close()
 
     return templates.TemplateResponse(
         "dashboard.html",
         {
             "request": request,
             "title": "Dashboard",
-            "total_certificates": total_certificates
+            "total_certificates": total_certificates,
+            "total_blockchain": total_blockchain
         }
     )
 
@@ -244,40 +223,44 @@ def list_certificates(
     if auth:
         return auth
 
-    meta_file = "certificates/certificates.json"
-    certs = []
+    db = SessionLocal()
 
-    if os.path.exists(meta_file):
-        try:
-            with open(meta_file, "r") as f:
-                certs = json.load(f)
-                if not isinstance(certs, list):
-                    certs = []
-        except:
-            certs = []
+    query = db.query(Certificate)
 
-    # FILTER
     if nim:
-        certs = [c for c in certs if nim.lower() in c["nim"].lower()]
+        query = query.filter(Certificate.nim.ilike(f"%{nim}%"))
 
-    # PAGINATION
+    total = query.count()
+
     per_page = 5
-    total = len(certs)
     total_pages = ceil(total / per_page) if total > 0 else 1
 
-    start = (page - 1) * per_page
-    end = start + per_page
-    paginated_certs = certs[start:end]
+    # Validasi page
+    if page < 1:
+        page = 1
+    if page > total_pages:
+        page = total_pages
+
+    certificates = (
+        query
+        .order_by(Certificate.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    db.close()
 
     return templates.TemplateResponse(
         "certificates.html",
         {
             "request": request,
             "title": "Daftar Sertifikat",
-            "certificates": paginated_certs,
+            "certificates": certificates,
             "page": page,
             "total_pages": total_pages,
-            "search_nim": nim
+            "search_nim": nim,
+            "total_data": total
         }
     )
 
