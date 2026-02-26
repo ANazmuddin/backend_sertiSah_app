@@ -1,5 +1,4 @@
 import os
-import json
 import uuid
 import hashlib
 from datetime import datetime
@@ -9,15 +8,21 @@ from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 
+from app.database import SessionLocal
+from app.models import Certificate
 from app.blockchain import store_certificate_on_chain
 
 
 # ===============================
-# CONFIG
+# PATH CONFIGURATION
 # ===============================
 
-CERT_DIR = "certificates"
-META_FILE = os.path.join(CERT_DIR, "certificates.json")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(BASE_DIR)
+
+CERT_DIR = os.path.join(PROJECT_ROOT, "certificates")
+STATIC_DIR = os.path.join(PROJECT_ROOT, "static")
+LOGO_PATH = os.path.join(STATIC_DIR, "UCA.png")
 
 if not os.path.exists(CERT_DIR):
     os.makedirs(CERT_DIR)
@@ -29,41 +34,35 @@ if not os.path.exists(CERT_DIR):
 
 def generate_certificate(name, nim, program_studi, institusi):
 
+    db = SessionLocal()
+
     certificate_id = str(uuid.uuid4())
     issue_date = datetime.now().strftime("%d %B %Y")
 
-    # ===============================
-    # 🔐 HASH UNTUK VERIFIKASI
-    # ===============================
     raw_data = f"{name}{nim}{program_studi}{institusi}{certificate_id}"
     certificate_hash = hashlib.sha256(raw_data.encode()).hexdigest()
 
     print("HASH YANG DIGENERATE:", certificate_hash)
 
-    # ===============================
-    # 🔗 SIMPAN KE BLOCKCHAIN
-    # ===============================
-    tx_hash = None
+    # 🔗 Store ke Blockchain
     try:
         tx_hash = store_certificate_on_chain(certificate_hash)
         print("BLOCKCHAIN TX HASH:", tx_hash)
     except Exception as e:
+        tx_hash = None
         print("ERROR BLOCKCHAIN:", e)
 
-    # ===============================
-    # 📁 FILE PATH
-    # ===============================
     pdf_path = os.path.join(CERT_DIR, f"{certificate_id}.pdf")
     qr_path = os.path.join(CERT_DIR, f"{certificate_id}_qr.png")
 
     # ===============================
-    # 📷 GENERATE QR
+    # GENERATE QR
     # ===============================
     qr = qrcode.make(certificate_hash)
     qr.save(qr_path)
 
     # ===============================
-    # 📄 GENERATE PDF
+    # GENERATE PDF
     # ===============================
     c = canvas.Canvas(pdf_path, pagesize=A4)
     width, height = A4
@@ -73,19 +72,25 @@ def generate_certificate(name, nim, program_studi, institusi):
     c.setLineWidth(4)
     c.rect(30, 30, width - 60, height - 60)
 
-    # Logo (optional)
-    logo_path = "static/UCA.png"
-    if os.path.exists(logo_path):
+    # ===============================
+    # LOGO
+    # ===============================
+    if os.path.exists(LOGO_PATH):
         c.drawImage(
-            logo_path,
+            LOGO_PATH,
             width/2 - 50,
             height - 150,
             width=100,
             height=100,
-            preserveAspectRatio=True
+            preserveAspectRatio=True,
+            mask='auto'
         )
+    else:
+        print("LOGO TIDAK DITEMUKAN:", LOGO_PATH)
 
-    # Title
+    # ===============================
+    # TITLE
+    # ===============================
     c.setFont("Helvetica-Bold", 24)
     c.drawCentredString(width/2, height - 180, "SERTIFIKAT AKADEMIK")
 
@@ -109,7 +114,7 @@ def generate_certificate(name, nim, program_studi, institusi):
     # Issue Date
     c.drawString(60, 100, f"Tanggal Terbit: {issue_date}")
 
-    # Signature line
+    # Signature Line
     c.line(width - 200, 120, width - 60, 120)
     c.drawString(width - 190, 100, "Kepala Program Studi")
 
@@ -119,33 +124,26 @@ def generate_certificate(name, nim, program_studi, institusi):
     c.save()
 
     # ===============================
-    # 💾 SIMPAN METADATA JSON
+    # SAVE TO DATABASE
     # ===============================
-    certificate_data = {
+    new_certificate = Certificate(
+        certificate_id=certificate_id,
+        name=name,
+        nim=nim,
+        program_studi=program_studi,
+        institusi=institusi,
+        issue_date=issue_date,
+        certificate_hash=certificate_hash,
+        blockchain_tx=tx_hash
+    )
+
+    db.add(new_certificate)
+    db.commit()
+    db.refresh(new_certificate)
+    db.close()
+
+    return {
         "certificate_id": certificate_id,
-        "name": name,
-        "nim": nim,
-        "program_studi": program_studi,
-        "institusi": institusi,
-        "issue_date": issue_date,
         "certificate_hash": certificate_hash,
         "blockchain_tx": tx_hash
     }
-
-    certs = []
-
-    if os.path.exists(META_FILE):
-        try:
-            with open(META_FILE, "r") as f:
-                certs = json.load(f)
-                if not isinstance(certs, list):
-                    certs = []
-        except Exception:
-            certs = []
-
-    certs.append(certificate_data)
-
-    with open(META_FILE, "w") as f:
-        json.dump(certs, f, indent=4)
-
-    return certificate_data
