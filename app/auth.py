@@ -1,4 +1,4 @@
-from fastapi import Request, Depends
+from fastapi import Request, HTTPException
 from fastapi.responses import RedirectResponse
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
@@ -6,14 +6,18 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import AdminUser
 
-# ================= PASSWORD CONTEXT =================
+# ==========================================================
+# PASSWORD CONTEXT
+# ==========================================================
 
 pwd_context = CryptContext(
     schemes=["pbkdf2_sha256"],
     deprecated="auto"
 )
 
-# ================= DATABASE DEPENDENCY =================
+# ==========================================================
+# DATABASE DEPENDENCY
+# ==========================================================
 
 def get_db():
     db = SessionLocal()
@@ -22,7 +26,9 @@ def get_db():
     finally:
         db.close()
 
-# ================= PASSWORD UTILS =================
+# ==========================================================
+# PASSWORD UTILITIES
+# ==========================================================
 
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
@@ -30,10 +36,14 @@ def verify_password(plain: str, hashed: str) -> bool:
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
-# ================= AUTHENTICATION =================
+# ==========================================================
+# AUTHENTICATION
+# ==========================================================
 
 def authenticate_admin(username: str, password: str, db: Session):
-    user = db.query(AdminUser).filter(AdminUser.username == username).first()
+    user = db.query(AdminUser).filter(
+        AdminUser.username == username
+    ).first()
 
     if not user:
         return None
@@ -43,7 +53,9 @@ def authenticate_admin(username: str, password: str, db: Session):
 
     return user
 
-# ================= LOGIN REQUIRED DEPENDENCY =================
+# ==========================================================
+# LOGIN REQUIRED (Session Check)
+# ==========================================================
 
 def login_required(request: Request):
     admin_id = request.session.get("admin_id")
@@ -52,3 +64,45 @@ def login_required(request: Request):
         return RedirectResponse("/login", status_code=302)
 
     return None
+
+
+# ==========================================================
+# GET CURRENT USER FROM SESSION
+# ==========================================================
+
+def get_current_user(request: Request):
+    admin_id = request.session.get("admin_id")
+
+    if not admin_id:
+        return None
+
+    db = SessionLocal()
+    user = db.query(AdminUser).filter(
+        AdminUser.id == admin_id
+    ).first()
+    db.close()
+
+    return user
+
+
+# ==========================================================
+# ROLE REQUIRED (RBAC)
+# ==========================================================
+
+def role_required(allowed_roles: list):
+    def checker(request: Request):
+
+        admin_role = request.session.get("admin_role")
+
+        if not admin_role:
+            return RedirectResponse("/login", status_code=302)
+
+        if admin_role not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail="Anda tidak memiliki izin untuk mengakses halaman ini"
+            )
+
+        return None
+
+    return checker
