@@ -1,5 +1,4 @@
 import os
-import json
 from math import ceil
 
 from fastapi import FastAPI, Request, Form, Depends, HTTPException
@@ -9,19 +8,22 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.database import engine, SessionLocal
-from app.models import Base, Certificate
+from app.models import Base, Certificate, AuditLog
 from app.auth import login_required, authenticate_admin
 from app.certificate_service import generate_certificate
 from app.schemas import VerifyRequest, VerifyResponse
 from app.blockchain import verify_certificate_on_chain
+from app.auth import role_required
 
 
-# ================= APP INIT =================
+# ==========================================================
+# APP INIT
+# ==========================================================
 
 app = FastAPI(
     title="API Verifikasi Sertifikat",
     description="Backend untuk verifikasi sertifikat akademik digital",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 app.add_middleware(
@@ -35,9 +37,9 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 Base.metadata.create_all(bind=engine)
 
 
-# ============================================================
-# ================= ANDROID API (PUBLIC) =====================
-# ============================================================
+# ==========================================================
+# ===================== ANDROID API ========================
+# ==========================================================
 
 @app.post("/verify", response_model=VerifyResponse)
 def verify_certificate(payload: VerifyRequest):
@@ -57,7 +59,12 @@ def verify_certificate(payload: VerifyRequest):
             blockchain_registered=False
         )
 
-    blockchain_status = verify_certificate_on_chain(payload.certificate_hash)
+    try:
+        blockchain_status = verify_certificate_on_chain(
+            payload.certificate_hash
+        )
+    except Exception:
+        blockchain_status = False
 
     response = VerifyResponse(
         valid=True,
@@ -81,9 +88,9 @@ def verify_certificate(payload: VerifyRequest):
     return response
 
 
-# ============================================================
-# ================= DOWNLOAD (PUBLIC) ========================
-# ============================================================
+# ==========================================================
+# ===================== DOWNLOAD (PUBLIC) ==================
+# ==========================================================
 
 @app.get("/download-certificate/{certificate_id}")
 def download_certificate(certificate_id: str):
@@ -100,9 +107,9 @@ def download_certificate(certificate_id: str):
     )
 
 
-# ============================================================
-# ================= AUTH ========================
-# ============================================================
+# ==========================================================
+# ========================= AUTH ============================
+# ==========================================================
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
@@ -123,6 +130,8 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
         )
 
     request.session["admin_id"] = user.id
+    request.session["admin_role"] = user.role   # <-- penting untuk RBAC
+
     return RedirectResponse("/dashboard", status_code=302)
 
 
@@ -132,9 +141,9 @@ def logout(request: Request):
     return RedirectResponse("/login", status_code=302)
 
 
-# ============================================================
-# ================= DASHBOARD (PROTECTED) ====================
-# ============================================================
+# ==========================================================
+# ====================== DASHBOARD ==========================
+# ==========================================================
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(
@@ -167,9 +176,9 @@ def dashboard(
     )
 
 
-# ============================================================
-# ================= GENERATE (PROTECTED) =====================
-# ============================================================
+# ==========================================================
+# ====================== GENERATE ===========================
+# ==========================================================
 
 @app.get("/generate", response_class=HTMLResponse)
 def generate_page(
@@ -197,7 +206,9 @@ def generate_submit(
     if auth:
         return auth
 
-    certificate = generate_certificate(name, nim, program_studi, institusi)
+    certificate = generate_certificate(
+        name, nim, program_studi, institusi
+    )
 
     return templates.TemplateResponse(
         "generate.html",
@@ -209,9 +220,9 @@ def generate_submit(
     )
 
 
-# ============================================================
-# ================= LIST CERTIFICATE =========================
-# ============================================================
+# ==========================================================
+# ====================== LIST CERTIFICATE ===================
+# ==========================================================
 
 @app.get("/certificates", response_class=HTMLResponse)
 def list_certificates(
@@ -228,14 +239,15 @@ def list_certificates(
     query = db.query(Certificate)
 
     if nim:
-        query = query.filter(Certificate.nim.ilike(f"%{nim}%"))
+        query = query.filter(
+            Certificate.nim.ilike(f"%{nim}%")
+        )
 
     total = query.count()
 
     per_page = 5
     total_pages = ceil(total / per_page) if total > 0 else 1
 
-    # Validasi page
     if page < 1:
         page = 1
     if page > total_pages:
@@ -265,6 +277,10 @@ def list_certificates(
     )
 
 
+# ==========================================================
+# ====================== DELETE CERTIFICATE =================
+# ==========================================================
+
 @app.post("/delete-certificate/{certificate_id}")
 def delete_certificate(
     request: Request,
@@ -274,22 +290,20 @@ def delete_certificate(
     if auth:
         return auth
 
-    meta_file = "certificates/certificates.json"
+    db = SessionLocal()
 
-    if not os.path.exists(meta_file):
-        raise HTTPException(status_code=404, detail="Data tidak ditemukan")
+    cert = db.query(Certificate).filter(
+        Certificate.certificate_id == certificate_id
+    ).first()
 
-    with open(meta_file, "r") as f:
-        certs = json.load(f)
+    if not cert:
+        db.close()
+        raise HTTPException(
+            status_code=404,
+            detail="Sertifikat tidak ditemukan"
+        )
 
-    cert_to_delete = next(
-        (c for c in certs if c["certificate_id"] == certificate_id),
-        None
-    )
-
-    if not cert_to_delete:
-        raise HTTPException(status_code=404, detail="Sertifikat tidak ditemukan")
-
+    # Hapus file PDF & QR
     pdf_path = f"certificates/{certificate_id}.pdf"
     qr_path = f"certificates/{certificate_id}_qr.png"
 
@@ -299,9 +313,46 @@ def delete_certificate(
     if os.path.exists(qr_path):
         os.remove(qr_path)
 
-    certs.remove(cert_to_delete)
-
-    with open(meta_file, "w") as f:
-        json.dump(certs, f, indent=4)
+    db.delete(cert)
+    db.commit()
+    db.close()
 
     return RedirectResponse("/certificates", status_code=302)
+
+@app.get("/audit-logs", response_class=HTMLResponse)
+def view_audit_logs(
+    request: Request,
+    page: int = 1,
+    auth=Depends(role_required(["SUPERADMIN"]))
+):
+    db = SessionLocal()
+
+    per_page = 10
+    total = db.query(AuditLog).count()
+    total_pages = ceil(total / per_page) if total > 0 else 1
+
+    if page < 1:
+        page = 1
+    if page > total_pages:
+        page = total_pages
+
+    logs = (
+        db.query(AuditLog)
+        .order_by(AuditLog.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    db.close()
+
+    return templates.TemplateResponse(
+        "audit_logs.html",   # ⬅ PASTIKAN NAMA FILE SESUAI
+        {
+            "request": request,
+            "title": "Audit Logs",
+            "logs": logs,
+            "page": page,
+            "total_pages": total_pages
+        }
+    )
