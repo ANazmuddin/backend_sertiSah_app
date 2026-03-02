@@ -2,9 +2,11 @@ from fastapi import Request, HTTPException
 from fastapi.responses import RedirectResponse
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
+from datetime import datetime
 
 from app.database import SessionLocal
-from app.models import AdminUser
+from app.models import AdminUser, AuditLog
+
 
 # ==========================================================
 # PASSWORD CONTEXT
@@ -14,6 +16,7 @@ pwd_context = CryptContext(
     schemes=["pbkdf2_sha256"],
     deprecated="auto"
 )
+
 
 # ==========================================================
 # DATABASE DEPENDENCY
@@ -26,6 +29,7 @@ def get_db():
     finally:
         db.close()
 
+
 # ==========================================================
 # PASSWORD UTILITIES
 # ==========================================================
@@ -33,8 +37,10 @@ def get_db():
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
+
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
+
 
 # ==========================================================
 # AUTHENTICATION
@@ -52,6 +58,7 @@ def authenticate_admin(username: str, password: str, db: Session):
         return None
 
     return user
+
 
 # ==========================================================
 # LOGIN REQUIRED (Session Check)
@@ -106,3 +113,26 @@ def role_required(allowed_roles: list):
         return None
 
     return checker
+
+
+# ==========================================================
+# AUDIT LOG CREATOR
+# ==========================================================
+
+def create_audit_log(
+    db: Session,
+    admin_id: int,
+    action: str,
+    description: str = "",
+    ip_address: str = None
+):
+    log = AuditLog(
+        admin_id=admin_id,
+        action=action,
+        description=description,
+        ip_address=ip_address,
+        created_at=datetime.utcnow()
+    )
+
+    db.add(log)
+    db.commit()
