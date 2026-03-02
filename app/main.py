@@ -9,11 +9,15 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.database import engine, SessionLocal
 from app.models import Base, Certificate, AuditLog
-from app.auth import login_required, authenticate_admin
+from app.auth import (
+    login_required,
+    authenticate_admin,
+    role_required,
+    create_audit_log
+)
 from app.certificate_service import generate_certificate
 from app.schemas import VerifyRequest, VerifyResponse
 from app.blockchain import verify_certificate_on_chain
-from app.auth import role_required
 
 
 # ==========================================================
@@ -22,7 +26,7 @@ from app.auth import role_required
 
 app = FastAPI(
     title="API Verifikasi Sertifikat",
-    description="Backend untuk verifikasi sertifikat akademik digital",
+    description="Backend Sistem Sertifikat Digital Terintegrasi Blockchain",
     version="2.0.0"
 )
 
@@ -42,7 +46,7 @@ Base.metadata.create_all(bind=engine)
 # ==========================================================
 
 @app.post("/verify", response_model=VerifyResponse)
-def verify_certificate(payload: VerifyRequest):
+def verify_certificate(payload: VerifyRequest, request: Request):
 
     db = SessionLocal()
 
@@ -65,6 +69,15 @@ def verify_certificate(payload: VerifyRequest):
         )
     except Exception:
         blockchain_status = False
+
+    # 🔎 Audit log untuk akses publik (Android)
+    create_audit_log(
+        db=db,
+        admin_id=None,
+        action="VERIFY_API",
+        description=f"Verify hash: {payload.certificate_hash}",
+        ip_address=request.client.host
+    )
 
     response = VerifyResponse(
         valid=True,
@@ -121,22 +134,48 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
 
     db = SessionLocal()
     user = authenticate_admin(username, password, db)
-    db.close()
 
     if not user:
+        db.close()
         return templates.TemplateResponse(
             "login.html",
             {"request": request, "error": "Username atau password salah"}
         )
 
     request.session["admin_id"] = user.id
-    request.session["admin_role"] = user.role   # <-- penting untuk RBAC
+    request.session["admin_role"] = user.role
 
+    # 🔐 Audit login
+    create_audit_log(
+        db=db,
+        admin_id=user.id,
+        action="LOGIN",
+        description="Admin login berhasil",
+        ip_address=request.client.host
+    )
+
+    db.close()
     return RedirectResponse("/dashboard", status_code=302)
 
 
 @app.get("/logout")
 def logout(request: Request):
+
+    admin_id = request.session.get("admin_id")
+
+    db = SessionLocal()
+
+    if admin_id:
+        create_audit_log(
+            db=db,
+            admin_id=admin_id,
+            action="LOGOUT",
+            description="Admin logout",
+            ip_address=request.client.host
+        )
+
+    db.close()
+
     request.session.clear()
     return RedirectResponse("/login", status_code=302)
 
@@ -206,9 +245,22 @@ def generate_submit(
     if auth:
         return auth
 
+    db = SessionLocal()
+
     certificate = generate_certificate(
         name, nim, program_studi, institusi
     )
+
+    # 📝 Audit
+    create_audit_log(
+        db=db,
+        admin_id=request.session.get("admin_id"),
+        action="GENERATE_CERTIFICATE",
+        description=f"Generate sertifikat untuk NIM {nim}",
+        ip_address=request.client.host
+    )
+
+    db.close()
 
     return templates.TemplateResponse(
         "generate.html",
@@ -239,19 +291,12 @@ def list_certificates(
     query = db.query(Certificate)
 
     if nim:
-        query = query.filter(
-            Certificate.nim.ilike(f"%{nim}%")
-        )
+        query = query.filter(Certificate.nim.ilike(f"%{nim}%"))
 
     total = query.count()
 
     per_page = 5
     total_pages = ceil(total / per_page) if total > 0 else 1
-
-    if page < 1:
-        page = 1
-    if page > total_pages:
-        page = total_pages
 
     certificates = (
         query
@@ -285,7 +330,7 @@ def list_certificates(
 def delete_certificate(
     request: Request,
     certificate_id: str,
-    auth=Depends(login_required)
+    auth=Depends(role_required(["SUPERADMIN"]))
 ):
     if auth:
         return auth
@@ -298,12 +343,8 @@ def delete_certificate(
 
     if not cert:
         db.close()
-        raise HTTPException(
-            status_code=404,
-            detail="Sertifikat tidak ditemukan"
-        )
+        raise HTTPException(status_code=404, detail="Sertifikat tidak ditemukan")
 
-    # Hapus file PDF & QR
     pdf_path = f"certificates/{certificate_id}.pdf"
     qr_path = f"certificates/{certificate_id}_qr.png"
 
@@ -314,10 +355,24 @@ def delete_certificate(
         os.remove(qr_path)
 
     db.delete(cert)
+
+    create_audit_log(
+        db=db,
+        admin_id=request.session.get("admin_id"),
+        action="DELETE_CERTIFICATE",
+        description=f"Hapus sertifikat {certificate_id}",
+        ip_address=request.client.host
+    )
+
     db.commit()
     db.close()
 
     return RedirectResponse("/certificates", status_code=302)
+
+
+# ==========================================================
+# ====================== AUDIT LOGS =========================
+# ==========================================================
 
 @app.get("/audit-logs", response_class=HTMLResponse)
 def view_audit_logs(
@@ -325,16 +380,14 @@ def view_audit_logs(
     page: int = 1,
     auth=Depends(role_required(["SUPERADMIN"]))
 ):
+    if auth:
+        return auth
+
     db = SessionLocal()
 
     per_page = 10
     total = db.query(AuditLog).count()
     total_pages = ceil(total / per_page) if total > 0 else 1
-
-    if page < 1:
-        page = 1
-    if page > total_pages:
-        page = total_pages
 
     logs = (
         db.query(AuditLog)
@@ -347,7 +400,7 @@ def view_audit_logs(
     db.close()
 
     return templates.TemplateResponse(
-        "audit_logs.html",   # ⬅ PASTIKAN NAMA FILE SESUAI
+        "audit_logs.html",
         {
             "request": request,
             "title": "Audit Logs",
