@@ -1,8 +1,9 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
 from datetime import datetime
 from app.database import Base
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
+from sqlalchemy.sql import func
 
 Base = declarative_base()
 
@@ -33,7 +34,8 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    admin_id = Column(Integer)
-    action = Column(String)
-    description = Column(Text)
+    admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
+    action = Column(String(100), nullable=False)
+    description = Column(String(255))
+    ip_address = Column(String(50))
     created_at = Column(DateTime, default=datetime.utcnow)
