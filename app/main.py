@@ -18,6 +18,7 @@ from app.auth import (
 from app.certificate_service import generate_certificate
 from app.schemas import VerifyRequest, VerifyResponse
 from app.blockchain import verify_certificate_on_chain
+from datetime import datetime
 
 
 # ==========================================================
@@ -80,22 +81,24 @@ def verify_certificate(payload: VerifyRequest, request: Request):
     )
 
     response = VerifyResponse(
-        valid=True,
-        message="Sertifikat ditemukan",
-        data={
-            "certificate_id": cert.certificate_id,
-            "name": cert.name,
-            "nim": cert.nim,
-            "program_studi": cert.program_studi,
-            "institusi": cert.institusi,
-            "issue_date": cert.issue_date,
-            "blockchain_verified": blockchain_status,
-            "transaction_hash": cert.blockchain_tx,
-            "explorer_url": f"https://amoy.polygonscan.com/tx/{cert.blockchain_tx}"
-            if cert.blockchain_tx else None
-        },
-        blockchain_registered=blockchain_status
-    )
+    valid=True,
+    message="Sertifikat ditemukan",
+    data={
+        "certificate_id": cert.certificate_id,
+        "name": cert.name,
+        "nim": cert.nim,
+        "program_studi": cert.program_studi,
+        "institusi": cert.institusi,
+        "issue_date": cert.issue_date,
+        "blockchain_verified": blockchain_status,
+        "transaction_hash": cert.blockchain_tx,
+        "explorer_url": f"https://amoy.polygonscan.com/tx/{cert.blockchain_tx}"
+        if cert.blockchain_tx else None,
+        "is_revoked": cert.is_revoked,
+        "revoked_reason": cert.revoked_reason
+    },
+    blockchain_registered=blockchain_status
+)
 
     db.close()
     return response
@@ -409,3 +412,40 @@ def view_audit_logs(
             "total_pages": total_pages
         }
     )
+
+@app.post("/revoke-certificate/{certificate_id}")
+def revoke_certificate(
+    request: Request,
+    certificate_id: str,
+    reason: str = Form(...),
+    auth=Depends(role_required(["SUPERADMIN"]))
+):
+    if auth:
+        return auth
+
+    db = SessionLocal()
+
+    cert = db.query(Certificate).filter(
+        Certificate.certificate_id == certificate_id
+    ).first()
+
+    if not cert:
+        db.close()
+        raise HTTPException(status_code=404, detail="Sertifikat tidak ditemukan")
+
+    cert.is_revoked = True
+    cert.revoked_at = datetime.utcnow()
+    cert.revoked_reason = reason
+
+    create_audit_log(
+        db=db,
+        admin_id=request.session.get("admin_id"),
+        action="REVOKE_CERTIFICATE",
+        description=f"Revoke sertifikat {certificate_id} alasan: {reason}",
+        ip_address=request.client.host
+    )
+
+    db.commit()
+    db.close()
+
+    return RedirectResponse("/certificates", status_code=302)
