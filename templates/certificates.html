@@ -4,11 +4,13 @@
 
 <div class="card">
 
-  <!-- ================= SEARCH BAR ================= -->
+  <!-- ================= HEADER ================= -->
   <div class="card-header">
     <h2>Daftar Sertifikat</h2>
+    <p>Total Data: {{ total_data }}</p>
   </div>
 
+  <!-- ================= SEARCH ================= -->
   <form method="get" action="/certificates" class="search-form">
     <input type="text"
            name="nim"
@@ -17,49 +19,111 @@
     <button type="submit" class="btn btn-primary">Cari</button>
   </form>
 
-  <!-- ================= TABEL ================= -->
+  <!-- ================= TABLE ================= -->
   {% if certificates and certificates|length > 0 %}
 
   <div class="table-container">
     <table class="cert-table">
       <thead>
         <tr>
+          <th>Status</th>
           <th>Nama</th>
           <th>NIM</th>
           <th>Program Studi</th>
           <th>Institusi</th>
           <th>Tanggal Terbit</th>
+          <th>Blockchain</th>
           <th>Aksi</th>
         </tr>
       </thead>
+
       <tbody>
         {% for cert in certificates %}
         <tr>
+
+          <!-- ================= STATUS ================= -->
+          <td>
+            {% if cert.is_revoked %}
+              <span class="badge badge-danger">REVOKED</span>
+            {% else %}
+              <span class="badge badge-success">ACTIVE</span>
+            {% endif %}
+          </td>
+
           <td>{{ cert.name }}</td>
           <td>{{ cert.nim }}</td>
           <td>{{ cert.program_studi }}</td>
           <td>{{ cert.institusi }}</td>
           <td>{{ cert.issue_date }}</td>
+
+          <!-- ================= BLOCKCHAIN ================= -->
+          <td>
+            {% if cert.blockchain_tx %}
+              <a href="https://amoy.polygonscan.com/tx/{{ cert.blockchain_tx }}"
+                 target="_blank"
+                 class="badge badge-info">
+                View TX
+              </a>
+            {% else %}
+              <span class="badge badge-warning">Not Stored</span>
+            {% endif %}
+          </td>
+
+          <!-- ================= ACTION ================= -->
           <td class="action-cell">
 
             <!-- Download -->
             <a href="/download-certificate/{{ cert.certificate_id }}"
-               class="btn btn-primary">
+               class="btn btn-primary btn-sm">
               Download
             </a>
 
-            <!-- Delete -->
-            <form method="post"
-                  action="/delete-certificate/{{ cert.certificate_id }}"
-                  onsubmit="return confirm('Yakin ingin menghapus sertifikat ini?');"
-                  style="display:inline;">
-              <button type="submit" class="btn btn-danger">
-                Delete
-              </button>
-            </form>
+            <!-- ================= REVOKE ================= -->
+            {% if not cert.is_revoked and request.session.get("admin_role") == "SUPERADMIN" %}
+              <form method="post"
+                    action="/revoke-certificate/{{ cert.certificate_id }}"
+                    style="display:inline;">
+                <input type="text"
+                       name="reason"
+                       placeholder="Alasan revoke"
+                       required
+                       class="input-reason">
+                <button type="submit"
+                        class="btn btn-warning btn-sm"
+                        onclick="return confirm('Yakin ingin mencabut sertifikat ini?');">
+                  Revoke
+                </button>
+              </form>
+            {% endif %}
+
+            <!-- ================= DELETE ================= -->
+            {% if not cert.is_revoked %}
+              <form method="post"
+                    action="/delete-certificate/{{ cert.certificate_id }}"
+                    onsubmit="return confirm('Yakin ingin menghapus sertifikat ini?');"
+                    style="display:inline;">
+                <button type="submit" class="btn btn-danger btn-sm">
+                  Delete
+                </button>
+              </form>
+            {% endif %}
 
           </td>
         </tr>
+
+        <!-- ================= REVOKE INFO ROW ================= -->
+        {% if cert.is_revoked %}
+        <tr class="revoke-row">
+          <td colspan="8">
+            <strong>Dicabut pada:</strong>
+            {{ cert.revoked_at }}
+            <br>
+            <strong>Alasan:</strong>
+            {{ cert.revoked_reason }}
+          </td>
+        </tr>
+        {% endif %}
+
         {% endfor %}
       </tbody>
     </table>
@@ -77,7 +141,7 @@
 
   {% else %}
 
-  <!-- ================= EMPTY STATE ================= -->
+  <!-- ================= EMPTY ================= -->
   <div class="empty-state">
     <p>Belum ada sertifikat yang tersedia.</p>
     <a href="/generate" class="btn btn-primary">
