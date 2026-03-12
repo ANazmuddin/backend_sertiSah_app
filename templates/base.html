@@ -2,33 +2,104 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>{{ title if title else "Admin Panel" }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title if title else "Admin Panel SertiSah" }}</title>
+  
   <link rel="stylesheet" href="/static/admin.css">
 </head>
 <body>
 
 <div class="layout">
-  <!-- Sidebar -->
+  
   <aside class="sidebar">
-    <h2>Sertifikat Digital</h2>
+    
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 40px;">
+      <div style="background-color: #4f46e5; padding: 8px; border-radius: 10px; display: flex;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          <polyline points="9 12 11 14 15 10"></polyline>
+        </svg>
+      </div>
+      <h2 style="margin-bottom: 0; font-size: 20px;">SertiSah</h2>
+    </div>
+
     <nav>
-      <a href="/dashboard">Dashboard</a>
-      <a href="/generate">Generate Sertifikat</a>
-      <a href="/certificates">Daftar Sertifikat</a>
-      <a href="/audit-logs">Audit Logs</a>
-      <a href="/logout" class="logout">Logout</a>
+      <a href="/dashboard">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 12px;">
+          <rect x="3" y="3" width="7" height="9" rx="1"></rect>
+          <rect x="14" y="3" width="7" height="5" rx="1"></rect>
+          <rect x="14" y="12" width="7" height="9" rx="1"></rect>
+          <rect x="3" y="16" width="7" height="5" rx="1"></rect>
+        </svg>
+        Dashboard
+      </a>
+      
+      <a href="/generate">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 12px;">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="12" y1="18" x2="12" y2="12"></line>
+          <line x1="9" y1="15" x2="15" y2="15"></line>
+        </svg>
+        Generate Sertifikat
+      </a>
+      
+      <a href="/certificates">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 12px;">
+          <line x1="8" y1="6" x2="21" y2="6"></line>
+          <line x1="8" y1="12" x2="21" y2="12"></line>
+          <line x1="8" y1="18" x2="21" y2="18"></line>
+          <line x1="3" y1="6" x2="3.01" y2="6"></line>
+          <line x1="3" y1="12" x2="3.01" y2="12"></line>
+          <line x1="3" y1="18" x2="3.01" y2="18"></line>
+        </svg>
+        Daftar Sertifikat
+      </a>
+      
+      <a href="/audit-logs">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 12px;">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+        </svg>
+        Audit Logs
+      </a>
     </nav>
+    
+    <a href="/logout" class="logout" style="display: flex; align-items: center; text-decoration: none; padding: 12px 16px; border-radius: 10px; font-weight: 500; transition: all 0.2s ease;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 12px;">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <polyline points="16 17 21 12 16 7"></polyline>
+        <line x1="21" y1="12" x2="9" y2="12"></line>
+      </svg>
+      Logout
+    </a>
   </aside>
 
-  <!-- Main content -->
   <main class="content">
-    <header class="header">
-      <h1>{{ title }}</h1>
+    
+    <header class="header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <h1 style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">{{ title }}</h1>
+        <p style="font-size: 14px; color: #64748b;">Panel Administrator SertiSah</p>
+      </div>
+      
+      <div style="display: flex; align-items: center; gap: 12px; background: white; padding: 8px 16px; border-radius: 50px; border: 1px solid #e2e8f0;">
+        <div style="text-align: right; display: none; @media (min-width: 600px) { display: block; }">
+          <p style="font-size: 13px; font-weight: 600; color: #0f172a; margin: 0;">Admin Pusat</p>
+          <p style="font-size: 11px; color: #64748b; margin: 0;">Aktif</p>
+        </div>
+        <div style="width: 36px; height: 36px; border-radius: 50%; background-color: #e0e7ff; color: #4f46e5; display: flex; align-items: center; justify-content: center;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </div>
+      </div>
     </header>
 
-    <section class="page-content">
+    <section class="page-content" style="background: transparent; box-shadow: none; padding: 0;">
       {% block content %}{% endblock %}
     </section>
+    
   </main>
 </div>
 
